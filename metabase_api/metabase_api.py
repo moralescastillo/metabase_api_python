@@ -1040,3 +1040,328 @@ class Metabase_API():
       pprint.pprint(ret_dict)
       
     return ret_dict
+
+
+  @staticmethod
+  def nested_replace(self, structure, original, new):
+      """
+      Replaces strings within a json using a dictionary.
+      As found in https://stackoverflow.com/questions/50631393/python-replace-values-in-unknown-structure-json-file
+      """
+
+      if type(structure) == list:
+          return [self.nested_replace(self, item, original, new) for item in structure]
+
+      if type(structure) == dict:
+          return {key: self.nested_replace(self, value, original, new)
+                  for key, value in structure.items()}
+
+      if structure == original:
+          return new
+      else:
+          return structure
+
+
+  def export_card(self, source_card_name=None, source_card_id=None,
+                  source_collection_name=None, source_collection_id=None):
+
+      """
+      ***Work in progress***
+      Given a card in a collection, the method returns a generalized version of the card's source json.
+      """
+
+      # make sure card is identifiable via name or id
+      if not source_card_id:
+          if not source_card_name:
+              raise ValueError('Either the name or id of the source card must be provided.')
+          else:
+              source_card_id = self.get_item_id(item_type='card',
+                                                item_name=source_card_name,
+                                                collection_id=source_collection_id,
+                                                collection_name=source_collection_name)
+
+      # get card's source json
+      source_card = self.get('/api/card/{}'.format(source_card_id))
+
+      # identify the name of the database used to create the card
+      source_card['dataset_query']['database'] = \
+          self.get_db_info(db_id=source_card['dataset_query']['database'])['name']
+
+      if source_card['dataset_query']['type'] == 'query':
+          # identify the name of the table used to create the card
+          source_card['dataset_query']['query']['source-table']=\
+              self.get_item_name(item_type='table',
+                                 item_id=source_card['dataset_query']['query']['source-table'])
+
+          # create a dictionary composed of columns names and their respective ids, according to table and db
+          column_dict = self.get_columns_name_id(table_name=source_card['dataset_query']['query']['source-table'],
+                                                 db_name=source_card['dataset_query']['database'])
+
+          # if card's query is filtered, generalize filter-by fields using column_dict
+          if 'filter' in source_card['dataset_query']['query']:
+              filter_json = source_card['dataset_query']['query']['filter']
+              for key in column_dict:
+                  search_term_field = column_dict[key]
+                  filter_json = self.nested_replace(self, filter_json, search_term_field, key.lower() + '_field_id')
+              source_card['dataset_query']['query']['filter'] = filter_json
+
+          # if card uses a breakout fields for graphs, generalize breakout fields
+          if 'breakout' in source_card['dataset_query']['query']:
+              breakout_json = source_card['dataset_query']['query']['breakout']
+              for key in column_dict:
+                  search_term_field = column_dict[key]
+                  breakout_json = self.nested_replace(self, breakout_json, search_term_field, key.lower() + '_field_id')
+              source_card['dataset_query']['query']['breakout'] = breakout_json
+
+      # create a generalized version of the card's source json
+      source_card_export = {
+          'name': source_card['name'],
+          'dataset_query': source_card['dataset_query'],
+          'display': source_card['display']
+      }
+
+      return source_card_export
+
+
+  def import_card(self, source_card_export=None,
+                  destination_collection_name=None, destination_collection_id=None,
+                  verbose=False):
+
+      """
+      ***Work in progress***
+      Given a card's source json export, the method degeneralizes json data to fit the context of the metabase
+      instance where the card is being imported to.
+      """
+
+      # make sure the card's source export exists and is valid
+      if not source_card_export:
+          raise ValueError('A valid custom export json needs to be provided.')
+
+      # create a first draft of the card's degeneralized source json
+      source_card_import = {
+          'name': source_card_export['name'],
+          'dataset_query': source_card_export['dataset_query'],
+          'display': source_card_export['display']
+      }
+
+      # identify the id of the database used to create the card in the import context
+      source_card_import['dataset_query']['database'] = \
+          self.get_db_id(db_name=source_card_export['dataset_query']['database'])
+
+      # the key "query" is created when the it is a "simple question" card. When SQL is explicit, then type = native
+      if source_card_import['dataset_query']['type'] == 'query':
+
+          # identify the id of the table used to create the card in the import context
+          source_card_import['dataset_query']['query']['source-table'] = \
+              self.get_table_id(
+                  table_name=source_card_export['dataset_query']['query']['source-table'],
+                  db_id=source_card_export['dataset_query']['database'])
+
+          # create a dictionary composed of columns names and their respective ids, according to table and db
+          column_dict = \
+              self.get_columns_name_id(table_id=source_card_import['dataset_query']['query']['source-table'],
+                                       db_id=source_card_import['dataset_query']['database'])
+
+          # if card's query is filtered, degeneralize filter-by fields using column_dict
+          if 'filter' in source_card_import['dataset_query']['query']:
+              filter_json = source_card_import['dataset_query']['query']['filter']
+              for key in column_dict:
+                  search_term_field = key.lower() + '_field_id'
+                  filter_json = self.nested_replace(self, filter_json, search_term_field, column_dict[key])
+              source_card_import['dataset_query']['query']['filter'] = filter_json
+
+          # if card uses a breakout fields for graphs, generalize breakout fields
+          if 'breakout' in source_card_import['dataset_query']['query']:
+              breakout_json = source_card_import['dataset_query']['query']['breakout']
+              for key in column_dict:
+                  search_term_field = key.lower() + '_field_id'
+                  breakout_json = self.nested_replace(self, breakout_json, search_term_field, column_dict[key])
+              source_card_import['dataset_query']['query']['breakout'] = breakout_json
+
+      # create card based on the final draft of source_card_import, the degeneralized source json
+      res = self.create_card(collection_name=destination_collection_name,
+                             collection_id=destination_collection_id,
+                             custom_json=source_card_import,
+                             verbose=verbose,
+                             return_card=True)
+
+      return res['id']
+
+
+  def export_dashboard(self, source_dashboard_id=None, source_dashboard_name=None,
+                       source_collection_id=None, source_collection_name=None):
+
+      """
+      ***Work in progress***
+      Given a dashboard's source json, the method generalizes json data to fit the context of the metabase
+      instance where the dashboard is being imported to.
+      """
+
+      # make sure a valid dashboard id or name is provided
+      if not source_dashboard_id:
+          if not source_dashboard_name:
+              raise ValueError('Either the name or id of the source dashboard must be provided.')
+          else:
+              source_dashboard_id = self.get_item_id(item_type='dashboard',
+                                                     item_name=source_dashboard_name,
+                                                     collection_id=source_collection_id,
+                                                     collection_name=source_collection_name)
+
+      # get dashboard's source json
+      source_dashboard = self.get('/api/dashboard/{}'.format(source_dashboard_id))
+
+      # get information from cards found in the given dashboard
+      ordered_cards_list = []
+      for ii in source_dashboard['ordered_cards']:
+          # ii = source_dashboard['ordered_cards'][4]
+          # "virtual card" implies the card is a simple text card. No further processing needed
+          if 'virtual_card' in ii['visualization_settings']:
+              pass
+          elif 'dataset_query' in ii['card']:
+              if ii['card']['dataset_query']['type'] == 'native':
+                  pass
+              else:
+                  table_name = self.get_item_name(item_type='table',
+                                                  item_id=ii['card']['table_id'])
+                  db_name = self.get_db_info(db_id=ii['card']['database_id'])['name']
+                  # if parameter mappings exist, the card and dashboard are connected via filters.
+                  if not ii['parameter_mappings'] == []:
+                      # create a dictionary composed of columns names and their respective ids, according to table and db
+                      column_dict = self.get_columns_name_id(table_name=table_name,
+                                                             db_name=db_name)
+                      # generalize parameter mappings using column_dict
+                      for jj in ii['parameter_mappings']:
+                          target_list = jj['target']
+                          for key in column_dict:
+                              search_term_field = column_dict[key]
+                              target_list = self.nested_replace(self, target_list,
+                                                                search_term_field,
+                                                                key.lower() + '_field_id')
+                          jj['target'] = target_list
+
+          # gather needed dashboard json data for export
+          card_meta = {}
+          for prop in ['sizeX', 'sizeY', 'col', 'row', 'series', 'parameter_mappings', 'visualization_settings']:
+              card_meta[prop] = ii[prop]
+
+          # if virtual card (text card), leave as it is. Otherwise, use the export_card() method to create a export
+          # version of each card found in dashboard.
+          if 'virtual_card' in card_meta['visualization_settings']:
+              card_meta['card'] = {}
+          elif 'dataset_query' in ii['card']:
+              if ii['card']['dataset_query']['type'] == 'native':
+                  card_meta['card'] = self.export_card(source_card_name=ii['card']['name'],
+                                                       source_collection_id=ii['card']['collection_id'])
+              else:
+                  card_meta['card'] = self.export_card(source_card_name=ii['card']['name'],
+                                                       source_collection_id=ii['card']['collection_id'])
+                  card_meta['card']['db_name'] = db_name
+                  # include table and db names to facilitate degeneralization
+                  card_meta['card']['table_name'] = table_name
+                  card_meta['card']['db_name'] = db_name
+          ordered_cards_list.append(card_meta)
+
+      # gather final version of exportable dashboard
+      source_dashboard_export = {
+          "name": source_dashboard['name'],
+          "description": source_dashboard['description'],
+          "parameters": source_dashboard['parameters'],
+          "cache_ttl": source_dashboard['cache_ttl'],
+          "collection_id": None,
+          "collection_position": None,
+          "ordered_cards": ordered_cards_list
+      }
+
+      return source_dashboard_export
+
+
+  def import_dashboard(self,
+                       source_dashboard_export=None,
+                       destination_dashboard_name=None,
+                       destination_collection_id=None, destination_collection_name=None,
+                       postfix=''):
+
+      """
+      ***Work in progress***
+      Given a dashboard's source json export, the method degeneralizes json data to fit the context of the metabase
+      instance where the dashboard is being imported to.
+      """
+
+      # make sure a valid dashboard json export has been provided
+      if not source_dashboard_export:
+          raise ValueError('A valid dashboard export json needs to be provided.')
+
+      # get imported dashboard's name
+      source_dashboard_name = source_dashboard_export['name']
+      if not destination_dashboard_name:
+          destination_dashboard_name = source_dashboard_name + postfix
+
+      # make sure a valid destination collection name or id has been provided
+      if not destination_collection_id:
+          if not destination_collection_name:
+              raise ValueError('Either the name or id of the destination collection must be provided.')
+          else:
+              destination_collection_id = self.get_collection_id(destination_collection_name)
+      source_dashboard_export['collection_id'] = destination_collection_id
+
+      # create an initial bare dashboard according to the export json information
+      res = self.post('/api/dashboard/', json=source_dashboard_export)
+      dashboard_id = res['id']
+
+      # create a collection for the purpose of storing the dashboard's cards.
+      res = self.post('/api/collection/',
+                           json={'name': destination_dashboard_name + "'s cards",
+                                 'color': '#509EE3',
+                                 'parent_id': destination_collection_id})
+      cards_collection_id = res['id']
+
+      # extract card information from export json and create cards using import_card()
+      for ii in source_dashboard_export['ordered_cards']:
+          # if card is virtual card (text card), then nothing to import
+          if 'virtual_card' in ii['visualization_settings']:
+              card_json_dump = {"cardId": None}
+              res = self.post('/api/dashboard/' + str(dashboard_id) + '/cards', json=card_json_dump)
+              ii['card_id'] = None
+              ii['id'] = res['id']
+          else:
+              card_id = self.import_card(source_card_export=ii['card'],
+                                         destination_collection_id=cards_collection_id)
+              ii['card']['id'] = card_id
+              card_json_dump = {"cardId": card_id}
+              res = self.post('/api/dashboard/' + str(dashboard_id) + '/cards', json=card_json_dump)
+              ii['card_id'] = card_id
+              ii['id'] = res['id']
+
+      # get imported cards' order and size
+      ordered_cards_import = []
+      for ii in source_dashboard_export['ordered_cards']:
+          if 'virtual_card' in ii['visualization_settings']:
+              pass
+          else:
+              if not ii['parameter_mappings'] == []:
+                  card_id = ii['card']['id']
+                  # create a dictionary composed of columns names and their respective ids, according to table and db
+                  column_dict = self.get_columns_name_id(table_name=ii['card']['table_name'],
+                                                         db_name=ii['card']['db_name'])
+                  # degeneralize parameter mappings using column_dict
+                  for jj in ii['parameter_mappings']:
+                      jj['card_id'] = card_id
+                      target_list = jj['target']
+                      for key in column_dict:
+                          search_term_field = key.lower() + '_field_id'
+                          target_list = self.nested_replace(self, target_list, search_term_field, column_dict[key])
+                      jj['target'] = target_list
+
+          # get needed order and size information for each card, and gather in one list
+          card_order_info = {}
+          for prop in ['id', 'card_id', 'visualization_settings', 'col', 'row', 'sizeX', 'sizeY', 'series',
+                       'parameter_mappings']:
+              card_order_info[prop] = ii[prop]
+          ordered_cards_import.append(card_order_info)
+
+      # update dashboard with cards' order and size information
+      card_json_order = {"cards": ordered_cards_import}
+      res = self.put('/api/dashboard/' + str(dashboard_id) + '/cards', json=card_json_order)
+
+      if res == 200:
+          return (print('Your dashboard has been imported'))
