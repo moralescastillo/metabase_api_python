@@ -173,23 +173,41 @@ class Metabase_API():
   
 
   
-  def get_table_id(self, table_name, db_name=None, db_id=None):
+  def get_table_id(self, table_name, table_schema=None, db_name=None, db_id=None):
     tables = self.get("/api/table/")
     
-    if db_id:
-      table_IDs = [ i['id'] for i in tables if i['name'] == table_name and i['db']['id'] == db_id ]
+    if db_id and db_name and table_schema:
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name
+                     and i['db']['id'] == db_id
+                     and i['db']['name'] == db_name
+                     and i['schema'] == table_schema]
+    elif db_id and db_name:
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name
+                     and i['db']['id'] == db_id
+                     and i['db']['name'] == db_name]
+    elif db_name and table_schema:
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name
+                     and i['db']['name'] == db_name
+                     and i['schema'] == table_schema]
+    elif db_id and table_schema:
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name
+                     and i['db']['id'] == db_id
+                     and i['schema'] == table_schema]
+    elif db_id:
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name and i['db']['id'] == db_id]
     elif db_name:
-      table_IDs = [ i['id'] for i in tables if i['name'] == table_name and i['db']['name'] == db_name ]
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name and i['db']['name'] == db_name]
+    elif table_schema:
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name and i['schema'] == table_schema]
     else:
-      table_IDs = [ i['id'] for i in tables if i['name'] == table_name ]
-      
+        table_IDs = [i['id'] for i in tables if i['name'] == table_name]
+
     if len(table_IDs) > 1:
-      raise ValueError('There is more than one table with the name {}. Provide db id/name.'.format(table_name))
+        raise ValueError('There is more than one table with the name {}. Provide db id/name/schema.'.format(table_name))
     if len(table_IDs) == 0:
-      raise ValueError('There is no table with the name "{}" (in the provided db, if any)'.format(table_name))
+        raise ValueError('There is no table with the name "{}" (in the provided db, if any)'.format(table_name))
     
     return table_IDs[0]
-
 
 
   def get_db_id_from_table_id(self, table_id):
@@ -217,22 +235,19 @@ class Metabase_API():
       
     return self.get("/api/database/{}".format(db_id), params=params)
 
-
-
-  def get_table_metadata(self, table_name=None, table_id=None, db_name=None, db_id=None, params=None):
-    
+  def get_table_metadata(self, table_name=None, table_schema=None, table_id=None, db_name=None, db_id=None,
+                         params=None):
     if params:
       assert type(params) == dict
-    
+
     if not table_id:
       if not table_name:
         raise ValueError('Either the name or id of the table needs to be provided.')
-      table_id = self.get_table_id(table_name=table_name, db_name=db_name, db_id=db_id)
-      
+      table_id = self.get_table_id(table_name=table_name, table_schema=table_schema, db_name=db_name, db_id=db_id)
+
     return self.get("/api/table/{}/query_metadata".format(table_id), params=params)
 
 
-  
   def get_columns_name_id(self, table_name=None, db_name=None, table_id=None, db_id=None, verbose=False, column_id_name=False):
     '''Return a dictionary with col_name key and col_id value, for the given table_id/table_name in the given db_id/db_name.
        If column_id_name is True, return a dictionary with col_id key and col_name value.
@@ -1084,18 +1099,23 @@ class Metabase_API():
       source_card = self.get('/api/card/{}'.format(source_card_id))
 
       # identify the name of the database used to create the card
+      _db_id = source_card['dataset_query']['database']
+
       source_card['dataset_query']['database'] = \
-          self.get_db_info(db_id=source_card['dataset_query']['database'])['name']
+          self.get_db_info(db_id=_db_id)['name']
 
       if source_card['dataset_query']['type'] == 'query':
           # identify the name of the table used to create the card
+          _table_id = source_card['dataset_query']['query']['source-table']
+
           source_card['dataset_query']['query']['source-table']=\
-              self.get_item_name(item_type='table',
-                                 item_id=source_card['dataset_query']['query']['source-table'])
+              self.get_item_name(item_type='table', item_id=_table_id)
+
+          source_card['dataset_query']['query']['source-table-schema']=\
+              self.get_table_metadata(table_id=_table_id, db_id=_db_id)['schema']
 
           # create a dictionary composed of columns names and their respective ids, according to table and db
-          column_dict = self.get_columns_name_id(table_name=source_card['dataset_query']['query']['source-table'],
-                                                 db_name=source_card['dataset_query']['database'])
+          column_dict = self.get_columns_name_id(table_id=_table_id, db_id=_db_id)
 
           # if card's query is filtered, generalize filter-by fields using column_dict
           if 'filter' in source_card['dataset_query']['query']:
@@ -1145,22 +1165,26 @@ class Metabase_API():
       }
 
       # identify the id of the database used to create the card in the import context
+      _db_name = source_card_export['dataset_query']['database']
+
       source_card_import['dataset_query']['database'] = \
-          self.get_db_id(db_name=source_card_export['dataset_query']['database'])
+          self.get_db_id(db_name=_db_name)
 
       # the key "query" is created when the it is a "simple question" card. When SQL is explicit, then type = native
       if source_card_import['dataset_query']['type'] == 'query':
 
           # identify the id of the table used to create the card in the import context
+          _table_name = source_card_export['dataset_query']['query']['source-table']
+          _table_schema = source_card_export['dataset_query']['query']['source-table-schema']
+          _db_id = source_card_export['dataset_query']['database']
+
           source_card_import['dataset_query']['query']['source-table'] = \
-              self.get_table_id(
-                  table_name=source_card_export['dataset_query']['query']['source-table'],
-                  db_id=source_card_export['dataset_query']['database'])
+              self.get_table_id(table_name=_table_name, table_schema=_table_schema, db_id=_db_id)
 
           # create a dictionary composed of columns names and their respective ids, according to table and db
-          column_dict = \
-              self.get_columns_name_id(table_id=source_card_import['dataset_query']['query']['source-table'],
-                                       db_id=source_card_import['dataset_query']['database'])
+          _table_id = source_card_import['dataset_query']['query']['source-table']
+
+          column_dict = self.get_columns_name_id(table_id=_table_id, db_id=_db_id)
 
           # if card's query is filtered, degeneralize filter-by fields using column_dict
           if 'filter' in source_card_import['dataset_query']['query']:
