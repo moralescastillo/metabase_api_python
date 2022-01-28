@@ -1245,14 +1245,16 @@ class Metabase_API():
               if ii['card']['dataset_query']['type'] == 'native':
                   pass
               else:
-                  table_name = self.get_item_name(item_type='table',
-                                                  item_id=ii['card']['table_id'])
-                  db_name = self.get_db_info(db_id=ii['card']['database_id'])['name']
+                  _table_id = ii['card']['table_id']
+                  _db_id = ii['card']['database_id']
+                  table_name = self.get_item_name(item_type='table', item_id=_table_id)
+                  db_name = self.get_db_info(db_id=_db_id)['name']
+
                   # if parameter mappings exist, the card and dashboard are connected via filters.
                   if not ii['parameter_mappings'] == []:
                       # create a dictionary composed of columns names and their respective ids, according to table and db
-                      column_dict = self.get_columns_name_id(table_name=table_name,
-                                                             db_name=db_name)
+                      column_dict = self.get_columns_name_id(table_id=_table_id,
+                                                             db_id=_db_id)
                       # generalize parameter mappings using column_dict
                       for jj in ii['parameter_mappings']:
                           target_list = jj['target']
@@ -1282,6 +1284,7 @@ class Metabase_API():
                   card_meta['card']['db_name'] = db_name
                   # include table and db names to facilitate degeneralization
                   card_meta['card']['table_name'] = table_name
+                  card_meta['card']['table_schema'] = self.get_table_metadata(table_id=_table_id)['schema']
                   card_meta['card']['db_name'] = db_name
           ordered_cards_list.append(card_meta)
 
