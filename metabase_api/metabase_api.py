@@ -1368,8 +1368,12 @@ class Metabase_API():
               if not ii['parameter_mappings'] == []:
                   card_id = ii['card']['id']
                   # create a dictionary composed of columns names and their respective ids, according to table and db
-                  column_dict = self.get_columns_name_id(table_name=ii['card']['table_name'],
-                                                         db_name=ii['card']['db_name'])
+                  _table_id = self.get_table_id(table_name=ii['card']['table_name'],
+                                                table_schema=ii['card']['table_schema'],
+                                                db_name=ii['card']['db_name'])
+
+                  column_dict = self.get_columns_name_id(table_id=_table_id)
+
                   # degeneralize parameter mappings using column_dict
                   for jj in ii['parameter_mappings']:
                       jj['card_id'] = card_id
