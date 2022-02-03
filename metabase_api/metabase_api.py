@@ -189,6 +189,7 @@ class Metabase_API():
                        and i['db']['id'] == db_id
                        and i['db']['name'] == db_name
                        and i['schema'] == table_schema
+                       and i['db']['details']
                        and 'dataset-id' in i['db']['details']
                        and i['db']['details']['dataset-id'] == table_dataset]
       elif db_id and db_name:
@@ -203,6 +204,7 @@ class Metabase_API():
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['name'] == db_name
                        and i['schema'] == table_schema
+                       and i['db']['details']
                        and 'dataset-id' in i['db']['details']
                        and i['db']['details']['dataset-id'] == table_dataset]
       elif db_id and table_schema:
@@ -213,6 +215,7 @@ class Metabase_API():
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['id'] == db_id
                        and i['schema'] == table_schema
+                       and i['db']['details']
                        and 'dataset-id' in i['db']['details']
                        and i['db']['details']['dataset-id'] == table_dataset]
       elif db_id:
@@ -223,6 +226,7 @@ class Metabase_API():
           table_IDs = [i['id'] for i in tables if i['name'] == table_name and i['schema'] == table_schema]
       elif table_dataset:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
+                       and i['db']['details']
                        and 'dataset-id' in i['db']['details']
                        and i['db']['details']['dataset-id'] == table_dataset]
       else:
@@ -1142,11 +1146,12 @@ class Metabase_API():
 
           source_card['dataset_query']['query']['source-table-schema'] = _get_table_metadata['schema']
 
-          try:
-            source_card['dataset_query']['query']['source-table-dataset']=\
+
+          if _get_db_info['details'] and 'dataset-id' in _get_db_info['details']:
+            source_card['dataset_query']['query']['source-table-dataset'] = \
               _get_db_info['details']['dataset-id']
-          except:
-            pass
+          else:
+            source_card['dataset_query']['query']['source-table-dataset'] = None
 
           # create a dictionary composed of columns names and their respective ids, according to table and db
           column_dict = self.get_columns_name_id(table_id=_table_id, db_id=_db_id)
@@ -1210,10 +1215,12 @@ class Metabase_API():
           # identify the id of the table used to create the card in the import context
           _table_name = source_card_export['dataset_query']['query']['source-table']
           _table_schema = source_card_export['dataset_query']['query']['source-table-schema']
+          _table_dataset = source_card_export['dataset_query']['query']['source-table-dataset']
           _db_id = source_card_export['dataset_query']['database']
 
           source_card_import['dataset_query']['query']['source-table'] = \
-              self.get_table_id(table_name=_table_name, table_schema=_table_schema, db_id=_db_id)
+              self.get_table_id(table_name=_table_name, table_schema=_table_schema,
+                                table_dataset=_table_dataset, db_id=_db_id)
 
           # create a dictionary composed of columns names and their respective ids, according to table and db
           _table_id = source_card_import['dataset_query']['query']['source-table']
