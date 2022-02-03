@@ -1135,15 +1135,18 @@ class Metabase_API():
           # identify the name of the table used to create the card
           _table_id = source_card['dataset_query']['query']['source-table']
           _get_table_metadata = self.get_table_metadata(table_id=_table_id, db_id=_db_id)
+          _get_db_info = self.get_db_info(db_id=_db_id)
 
           source_card['dataset_query']['query']['source-table']=\
               self.get_item_name(item_type='table', item_id=_table_id)
 
           source_card['dataset_query']['query']['source-table-schema'] = _get_table_metadata['schema']
 
-          if 'dataset-id' in _get_table_metadata['db']['details']:
+          try:
             source_card['dataset_query']['query']['source-table-dataset']=\
-              _get_table_metadata['db']['details']['dataset-id']
+              _get_db_info['details']['dataset-id']
+          except:
+            pass
 
           # create a dictionary composed of columns names and their respective ids, according to table and db
           column_dict = self.get_columns_name_id(table_id=_table_id, db_id=_db_id)
