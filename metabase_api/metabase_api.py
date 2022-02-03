@@ -1320,13 +1320,21 @@ class Metabase_API():
                   card_meta['card'] = self.export_card(source_card_name=ii['card']['name'],
                                                        source_collection_id=ii['card']['collection_id'])
               else:
+                  _get_table_metadata = self.get_table_metadata(table_id=_table_id, db_id=_db_id)
+                  _get_db_info = self.get_db_info(db_id=_db_id)
+
                   card_meta['card'] = self.export_card(source_card_name=ii['card']['name'],
                                                        source_collection_id=ii['card']['collection_id'])
                   card_meta['card']['db_name'] = db_name
                   # include table and db names to facilitate degeneralization
                   card_meta['card']['table_name'] = table_name
-                  card_meta['card']['table_schema'] = self.get_table_metadata(table_id=_table_id)['schema']
+                  card_meta['card']['table_schema'] = _get_table_metadata['schema']
                   card_meta['card']['db_name'] = db_name
+                  if _get_db_info['details'] and 'dataset-id' in _get_db_info['details']:
+                    card_meta['card']['table_dataset'] = _get_db_info['details']['dataset-id']
+                  else:
+                    card_meta['card']['table_dataset'] = None
+
           ordered_cards_list.append(card_meta)
 
       # gather final version of exportable dashboard
