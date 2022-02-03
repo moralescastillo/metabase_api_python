@@ -1419,6 +1419,7 @@ class Metabase_API():
                   # create a dictionary composed of columns names and their respective ids, according to table and db
                   _table_id = self.get_table_id(table_name=ii['card']['table_name'],
                                                 table_schema=ii['card']['table_schema'],
+                                                table_dataset=ii['card']['table_dataset'],
                                                 db_name=ii['card']['db_name'])
 
                   column_dict = self.get_columns_name_id(table_id=_table_id)
