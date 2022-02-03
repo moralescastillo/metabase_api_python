@@ -183,15 +183,18 @@ class Metabase_API():
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['id'] == db_id
                        and i['db']['name'] == db_name
-                       and i['schema'] == table_schema]
+                       and (i['schema'] == table_schema
+                            or (i['db']['details']
+                            and 'dataset-id' in i['db']['details']
+                            and i['db']['details']['dataset-id'] == table_schema))]
       elif db_id and db_name and table_dataset:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['id'] == db_id
                        and i['db']['name'] == db_name
-                       and i['schema'] == table_schema
-                       and i['db']['details']
+                       and ((i['db']['details']
                        and 'dataset-id' in i['db']['details']
-                       and i['db']['details']['dataset-id'] == table_dataset]
+                       and i['db']['details']['dataset-id'] == table_dataset)
+                             or i['schema'] == table_dataset)]
       elif db_id and db_name:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['id'] == db_id
@@ -199,36 +202,47 @@ class Metabase_API():
       elif db_name and table_schema:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['name'] == db_name
-                       and i['schema'] == table_schema]
+                       and (i['schema'] == table_schema
+                            or (i['db']['details']
+                                and 'dataset-id' in i['db']['details']
+                                and i['db']['details']['dataset-id'] == table_schema))]
       elif db_name and table_dataset:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['name'] == db_name
-                       and i['schema'] == table_schema
-                       and i['db']['details']
-                       and 'dataset-id' in i['db']['details']
-                       and i['db']['details']['dataset-id'] == table_dataset]
+                       and ((i['db']['details']
+                             and 'dataset-id' in i['db']['details']
+                             and i['db']['details']['dataset-id'] == table_dataset)
+                            or i['schema'] == table_dataset)]
       elif db_id and table_schema:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['id'] == db_id
-                       and i['schema'] == table_schema]
+                       and (i['schema'] == table_schema
+                            or (i['db']['details']
+                                and 'dataset-id' in i['db']['details']
+                                and i['db']['details']['dataset-id'] == table_schema))]
       elif db_id and table_dataset:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
                        and i['db']['id'] == db_id
-                       and i['schema'] == table_schema
-                       and i['db']['details']
-                       and 'dataset-id' in i['db']['details']
-                       and i['db']['details']['dataset-id'] == table_dataset]
+                       and ((i['db']['details']
+                             and 'dataset-id' in i['db']['details']
+                             and i['db']['details']['dataset-id'] == table_dataset)
+                            or i['schema'] == table_dataset)]
       elif db_id:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name and i['db']['id'] == db_id]
       elif db_name:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name and i['db']['name'] == db_name]
       elif table_schema:
-          table_IDs = [i['id'] for i in tables if i['name'] == table_name and i['schema'] == table_schema]
+          table_IDs = [i['id'] for i in tables if i['name'] == table_name
+                       and (i['schema'] == table_schema
+                            or (i['db']['details']
+                                and 'dataset-id' in i['db']['details']
+                                and i['db']['details']['dataset-id'] == table_schema))]
       elif table_dataset:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name
-                       and i['db']['details']
-                       and 'dataset-id' in i['db']['details']
-                       and i['db']['details']['dataset-id'] == table_dataset]
+                       and ((i['db']['details']
+                             and 'dataset-id' in i['db']['details']
+                             and i['db']['details']['dataset-id'] == table_dataset)
+                             or i['schema'] == table_dataset)]
       else:
           table_IDs = [i['id'] for i in tables if i['name'] == table_name]
 
@@ -299,14 +313,30 @@ class Metabase_API():
         if not table_id:
           table_id = self.get_table_id(table_name)
         db_id = self.get_db_id_from_table_id(table_id)
-        
-    # Getting column names and IDs 
+
+    if not table_id:
+      table_id = self.get_table_id(table_name=table_name, db_id=db_id)
+
+    table_metadata = self.get_table_metadata(table_id=table_id, db_id=db_id)
+    db_info = self.get_db_info(db_id=db_id)
+
+    table_schema = table_metadata['schema']
+    if db_info['details'] and 'dataset-id' in db_info['details']:
+      table_dataset = db_info['details']['dataset-id']
+    else:
+      table_dataset = None
+
+    # Getting column names and IDs
     if column_id_name:
       return {i['id']: i['name'] for i in self.get("/api/database/{}/fields".format(db_id)) 
-                                 if i['table_name'] == table_name}
+                                 if i['table_name'] == table_name
+                                 and (i['schema'] == table_schema
+                                 or i['schema'] == table_dataset)}
     else:
       return {i['name']: i['id'] for i in self.get("/api/database/{}/fields".format(db_id)) 
-                                 if i['table_name'] == table_name}
+                                 if i['table_name'] == table_name
+                                 and (i['schema'] == table_schema
+                                 or i['schema'] == table_dataset)}
 
 
 
