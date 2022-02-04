@@ -57,7 +57,7 @@ mb_remote.import_dashboard(source_dashboard_export=source_dashboard_export, dest
 
 It is worth mentioning a couple of things:
 
-#### The import is limited to a limited type of cards
+#### The import is limited to few card types
 The library has been tested and works with cards of the type number, bar, tables, and text cards. It works with both Simple queries and native SQL queries.
 It imports a dashboard's filters and connects them to the cards. However, the code has not been tested with all types of metabase cards e.g. maps, etc.
 
@@ -65,7 +65,7 @@ It imports a dashboard's filters and connects them to the cards. However, the co
 Metabase has this feature enabled by default. It causes the metabase instance to rename e.g. column_name to Column Name. It is not always consistent across instances/database connections. 
 Go Admin > General > Friendly Table and Fields Names > Disabled.
 
-#### It works from Redshift to BQ and viceversa
+#### It works from Redshift to BigQuery and viceversa
 Just make sure that the table schemas/dataset-ids are the same, table names are the same and database names (in metabase) are the same.
 
 #### Serialization Service
