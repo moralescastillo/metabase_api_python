@@ -1,3 +1,78 @@
+## Hello
+
+This is an experimental version of the python library *metabase-api*. The goal is to leverage the work done by the package creator and its contributors to create a version of the package that copies dashboards from one Metabase instance to another.
+
+To achieve this goal, the following methods have been substantially modified:
+
+```python
+get_table_id()
+get_columns_name_id()
+```
+
+Moreover, the following methods have been added:
+
+```python
+nested_replace()
+export_card()
+import_card()
+export_dashboard()
+import_dashboard()
+```
+
+In order to install this version of the package, please first create a virtual environment locally on your machine. Then install via pip
+
+```python
+pip install git+https://github.com/moralescastillo/metabase_api_python.git
+```
+
+Say you have a dashboard created on a Metabase instance. Let's refer to this instance as **mb_local**.
+
+Now, imagine there is another Metabase instance with the same database connection as in **mb_local**. Let's refer to this instance as **mb_remote**. 
+
+Start by instanciating the Metabase_API class for both the local metabase instance and the remote metabase instances with their respective credentials: 
+
+```python
+from metabase_api import Metabase_API
+
+mb_local = Metabase_API(domain = 'https://local.metabase.net/',
+                        email = 'darth@vader.com',
+                        password = 'xxx')
+
+mb_remote = Metabase_API(domain = 'https://remote.metabase.net/',
+                         email = 'luke@skywalker.com',
+                         password = 'yyy')
+```
+
+Then, create a dashboard export json from the local instance
+
+```python
+source_dashboard_export = mb_local.export_dashboard(source_dashboard_name='01_dashboard', source_collection_name='my_original_dashboards')
+```
+ 
+and finally import it to the remote instance.
+
+```python
+mb_remote.import_dashboard(source_dashboard_export=source_dashboard_export, destination_collection_name='my_imported_dashboards')
+```
+
+It is worth mentioning a couple of things:
+
+#### The import is limited to a limited type of cards
+The library has been tested and works with cards of the type number, bar, tables, and text cards. It works with both Simple queries and native SQL queries.
+It imports a dashboard's filters and connects them to the cards. However, the code has not been tested with all types of metabase cards e.g. maps, etc.
+
+#### Disable "Friendly Table and Fields Name"
+Metabase has this feature enabled by default. It causes the metabase instance to rename e.g. column_name to Column Name. It is not always consistent across instances/database connections. 
+Go Admin > General > Friendly Table and Fields Names > Disabled.
+
+#### It works from Redshift to BQ and viceversa
+Just make sure that the table schemas/dataset-ids are the same, table names are the same and database names (in metabase) are the same.
+
+#### Serialization Service
+It is worth mentioning that Metabase offers *Serialization*, which allows you to copy content from one instance to another. This service is only available for Pro and Enterprise clients (at least 500€/month)
+
+# Original README file
+
 <!--[![HitCount](http://hits.dwyl.com/vvaezian/metabase_api_python.svg)](http://hits.dwyl.com/vvaezian/metabase_api_python)-->
 [![PyPI version](https://badge.fury.io/py/metabase-api.svg?)](https://badge.fury.io/py/metabase-api)
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](https://github.com/vvaezian/metabase_api_python/issues)
